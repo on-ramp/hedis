@@ -38,6 +38,7 @@ import System.IO.Unsafe(unsafeInterleaveIO)
 import Database.Redis.Protocol(Reply(..), renderRequest, reply)
 import qualified Database.Redis.Cluster.Command as CMD
 import Database.Redis.Hooks (Hooks)
+import Network.TLS (ClientParams (..))
 
 -- This module implements a clustered connection whilst maintaining
 -- compatibility with the original Hedis codebase. In particular it still
@@ -105,8 +106,8 @@ instance Exception CrossSlotException
 data ClusterAuthError = ClusterAuthError Host Port Reply deriving (Show)
 instance Exception ClusterAuthError
 
-connect :: Maybe B.ByteString -> Maybe B.ByteString -> [CMD.CommandInfo] -> MVar ShardMap -> Maybe Int -> Hooks -> IO Connection
-connect mUsername mPassword commandInfos shardMapVar timeoutOpt hooks' = do
+connect :: Maybe B.ByteString -> Maybe B.ByteString -> Maybe ClientParams -> [CMD.CommandInfo] -> MVar ShardMap -> Maybe Int -> Hooks -> IO Connection
+connect mUsername mPassword mTlsParams commandInfos shardMapVar timeoutOpt hooks' = do
         shardMap <- readMVar shardMapVar
         stateVar <- newMVar $ Pending []
         pipelineVar <- newMVar $ Pipeline stateVar
@@ -116,7 +117,18 @@ connect mUsername mPassword commandInfos shardMapVar timeoutOpt hooks' = do
     nodeConnections shardMap = HM.fromList <$> mapM connectNode (nub $ nodes shardMap)
     connectNode :: Node -> IO (NodeID, NodeConnection)
     connectNode (Node n _ host port) = do
-        ctx <- CC.connect host (CC.PortNumber $ toEnum port) timeoutOpt
+        ctx0 <- CC.connect host (CC.PortNumber $ toEnum port) timeoutOpt
+        ctx <- case mTlsParams of
+                  Nothing -> pure ctx0
+                  Just defaultTlsParams -> do
+                      -- The defaultTlsParams are used to connect to the first
+                      -- host in the cluster, other hosts have different
+                      -- hostnames and so require a different server
+                      -- identification params
+                      let tlsParams = defaultTlsParams {
+                                        clientServerIdentification =  (host, Char8.pack $ show port)
+                                      }
+                      CC.enableTLS tlsParams ctx0
         ref <- IOR.newIORef Nothing
         let nodeConn = NodeConnection ctx ref n
         case mPassword of

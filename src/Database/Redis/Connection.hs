@@ -230,13 +230,15 @@ connectCluster bootstrapConnInfo = do
             shardMap <- shardMapFromClusterSlotsResponse slots
             newMVar shardMap
     commandInfos <- runRedisInternal conn command
+    let timeoutOptUs =
+          round . (1000000 *) <$> connectTimeout bootstrapConnInfo
     case commandInfos of
         Left e -> throwIO $ ClusterConnectError e
         Right infos -> do
 #if MIN_VERSION_resource_pool(0,3,0)
-            pool <- newPool (defaultPoolConfig (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectTLSParams bootstrapConnInfo) infos shardMapVar Nothing $ connectHooks bootstrapConnInfo) Cluster.disconnect (realToFrac $ connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo))
+            pool <- newPool (defaultPoolConfig (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectTLSParams bootstrapConnInfo) infos shardMapVar timeoutOptUs $ connectHooks bootstrapConnInfo) Cluster.disconnect (realToFrac $ connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo))
 #else
-            pool <- createPool (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectAuth bootstrapConnInfo) infos shardMapVar Nothing $ connectHooks bootstrapConnInfo) Cluster.disconnect 1 (connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo)
+            pool <- createPool (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectAuth bootstrapConnInfo) infos shardMapVar timeoutOptUs $ connectHooks bootstrapConnInfo) Cluster.disconnect 1 (connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo)
 #endif
             return $ ClusteredConnection shardMapVar pool
 

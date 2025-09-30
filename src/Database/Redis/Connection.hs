@@ -238,7 +238,7 @@ connectCluster bootstrapConnInfo = do
 #if MIN_VERSION_resource_pool(0,3,0)
             pool <- newPool (defaultPoolConfig (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectTLSParams bootstrapConnInfo) infos shardMapVar timeoutOptUs $ connectHooks bootstrapConnInfo) Cluster.disconnect (realToFrac $ connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo))
 #else
-            pool <- createPool (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectAuth bootstrapConnInfo) infos shardMapVar timeoutOptUs $ connectHooks bootstrapConnInfo) Cluster.disconnect 1 (connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo)
+            pool <- createPool (Cluster.connect (connectUsername bootstrapConnInfo) (connectAuth bootstrapConnInfo) (connectTLSParams bootstrapConnInfo) infos shardMapVar timeoutOptUs $ connectHooks bootstrapConnInfo) Cluster.disconnect 1 (connectMaxIdleTime bootstrapConnInfo) (connectMaxConnections bootstrapConnInfo)
 #endif
             return $ ClusteredConnection shardMapVar pool
 
